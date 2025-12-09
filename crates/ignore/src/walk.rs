@@ -171,10 +171,7 @@ impl DirEntryInner {
     }
 
     fn is_stdin(&self) -> bool {
-        match *self {
-            DirEntryInner::Stdin => true,
-            _ => false,
-        }
+        matches!(*self, DirEntryInner::Stdin)
     }
 
     fn metadata(&self) -> Result<Metadata, Error> {
@@ -298,7 +295,7 @@ impl DirEntryRaw {
         } else {
             Ok(self.metadata.clone())
         }
-        .map_err(|err| Error::Io(io::Error::from(err)).with_path(&self.path))
+        .map_err(|err| Error::Io(err).with_path(&self.path))
     }
 
     #[cfg(not(windows))]
@@ -308,7 +305,7 @@ impl DirEntryRaw {
         } else {
             fs::symlink_metadata(&self.path)
         }
-        .map_err(|err| Error::Io(io::Error::from(err)).with_path(&self.path))
+        .map_err(|err| Error::Io(err).with_path(&self.path))
     }
 
     fn file_type(&self) -> FileType {
@@ -332,7 +329,7 @@ impl DirEntryRaw {
 
     fn from_entry(depth: usize, ent: &fs::DirEntry) -> Result<DirEntryRaw, Error> {
         let ty = ent.file_type().map_err(|err| {
-            let err = Error::Io(io::Error::from(err)).with_path(ent.path());
+            let err = Error::Io(err).with_path(ent.path());
             Error::WithDepth {
                 depth,
                 err: Box::new(err),
@@ -348,7 +345,7 @@ impl DirEntryRaw {
         ty: fs::FileType,
     ) -> Result<DirEntryRaw, Error> {
         let md = ent.metadata().map_err(|err| {
-            let err = Error::Io(io::Error::from(err)).with_path(ent.path());
+            let err = Error::Io(err).with_path(ent.path());
             Error::WithDepth {
                 depth,
                 err: Box::new(err),
@@ -453,32 +450,32 @@ impl DirEntryRaw {
 /// the rules assume a default configuration.
 ///
 /// * First, glob overrides are checked. If a path matches a glob override,
-/// then matching stops. The path is then only skipped if the glob that matched
-/// the path is an ignore glob. (An override glob is a whitelist glob unless it
-/// starts with a `!`, in which case it is an ignore glob.)
+///   then matching stops. The path is then only skipped if the glob that matched
+///   the path is an ignore glob. (An override glob is a whitelist glob unless it
+///   starts with a `!`, in which case it is an ignore glob.)
 /// * Second, ignore files are checked. Ignore files currently only come from
-/// git ignore files (`.gitignore`, `.git/info/exclude` and the configured
-/// global gitignore file), plain `.ignore` files, which have the same format
-/// as gitignore files, or explicitly added ignore files. The precedence order
-/// is: `.ignore`, `.gitignore`, `.git/info/exclude`, global gitignore and
-/// finally explicitly added ignore files. Note that precedence between
-/// different types of ignore files is not impacted by the directory hierarchy;
-/// any `.ignore` file overrides all `.gitignore` files. Within each precedence
-/// level, more nested ignore files have a higher precedence than less nested
-/// ignore files.
+///   git ignore files (`.gitignore`, `.git/info/exclude` and the configured
+///   global gitignore file), plain `.ignore` files, which have the same format
+///   as gitignore files, or explicitly added ignore files. The precedence order
+///   is: `.ignore`, `.gitignore`, `.git/info/exclude`, global gitignore and
+///   finally explicitly added ignore files. Note that precedence between
+///   different types of ignore files is not impacted by the directory hierarchy;
+///   any `.ignore` file overrides all `.gitignore` files. Within each precedence
+///   level, more nested ignore files have a higher precedence than less nested
+///   ignore files.
 /// * Third, if the previous step yields an ignore match, then all matching
-/// is stopped and the path is skipped. If it yields a whitelist match, then
-/// matching continues. A whitelist match can be overridden by a later matcher.
+///   is stopped and the path is skipped. If it yields a whitelist match, then
+///   matching continues. A whitelist match can be overridden by a later matcher.
 /// * Fourth, unless the path is a directory, the file type matcher is run on
-/// the path. As above, if it yields an ignore match, then all matching is
-/// stopped and the path is skipped. If it yields a whitelist match, then
-/// matching continues.
+///   the path. As above, if it yields an ignore match, then all matching is
+///   stopped and the path is skipped. If it yields a whitelist match, then
+///   matching continues.
 /// * Fifth, if the path hasn't been whitelisted and it is hidden, then the
-/// path is skipped.
+///   path is skipped.
 /// * Sixth, unless the path is a directory, the size of the file is compared
-/// against the max filesize limit. If it exceeds the limit, it is skipped.
+///   against the max filesize limit. If it exceeds the limit, it is skipped.
 /// * Seventh, if the path has made it this far then it is yielded in the
-/// iterator.
+///   iterator.
 #[derive(Clone)]
 pub struct WalkBuilder {
     paths: Vec<PathBuf>,
@@ -494,6 +491,7 @@ pub struct WalkBuilder {
 }
 
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 enum Sorter {
     ByName(Arc<dyn Fn(&OsStr, &OsStr) -> Ordering + Send + Sync + 'static>),
     ByPath(Arc<dyn Fn(&Path, &Path) -> Ordering + Send + Sync + 'static>),
@@ -1138,7 +1136,7 @@ pub trait ParallelVisitorBuilder<'s> {
     fn build(&mut self) -> Box<dyn ParallelVisitor + 's>;
 }
 
-impl<'a, 's, P: ParallelVisitorBuilder<'s>> ParallelVisitorBuilder<'s> for &'a mut P {
+impl<'s, P: ParallelVisitorBuilder<'s>> ParallelVisitorBuilder<'s> for &mut P {
     fn build(&mut self) -> Box<dyn ParallelVisitor + 's> {
         (**self).build()
     }
@@ -1172,7 +1170,7 @@ struct FnVisitorImp<'s> {
     visitor: FnVisitor<'s>,
 }
 
-impl<'s> ParallelVisitor for FnVisitorImp<'s> {
+impl ParallelVisitor for FnVisitorImp<'_> {
     fn visit(&mut self, entry: Result<DirEntry, Error>) -> WalkState {
         (self.visitor)(entry)
     }
@@ -1342,7 +1340,7 @@ impl Work {
 
     /// Returns true if and only if this work item is a symlink.
     fn is_symlink(&self) -> bool {
-        self.dent.file_type().map_or(false, |ft| ft.is_symlink())
+        self.dent.file_type().is_some_and(|ft| ft.is_symlink())
     }
 
     /// Adds ignore rules for parent directories.
@@ -1488,7 +1486,7 @@ struct Worker<'s> {
     filter: Option<Filter>,
 }
 
-impl<'s> Worker<'s> {
+impl Worker<'_> {
     /// Runs this worker until there is no more work left to do.
     ///
     /// The worker will call the caller's callback for all entries that aren't
@@ -1553,7 +1551,7 @@ impl<'s> Worker<'s> {
             }
         };
 
-        if self.max_depth.map_or(false, |max| depth >= max) {
+        if self.max_depth.is_some_and(|max| depth >= max) {
             return WalkState::Skip;
         }
         for result in readdir {
@@ -1597,7 +1595,7 @@ impl<'s> Worker<'s> {
                 return self.visitor.visit(Err(err));
             }
         };
-        let is_symlink = dent.file_type().map_or(false, |ft| ft.is_symlink());
+        let is_symlink = dent.file_type().is_some_and(|ft| ft.is_symlink());
         if self.follow_links && is_symlink {
             let path = dent.path().to_path_buf();
             dent = match DirEntryRaw::from_path(depth, path, true) {
@@ -1772,10 +1770,7 @@ fn check_symlink_loop(
 // Before calling this function, make sure that you ensure that is really
 // necessary as the arguments imply a file stat.
 fn skip_filesize(max_filesize: u64, path: &Path, ent: &Option<Metadata>) -> bool {
-    let filesize = match *ent {
-        Some(ref md) => Some(md.len()),
-        None => None,
-    };
+    let filesize = ent.as_ref().map(|md| md.len());
 
     if let Some(fs) = filesize {
         if fs > max_filesize {
@@ -1866,7 +1861,7 @@ fn walkdir_is_dir(dent: &walkdir::DirEntry) -> bool {
     dent.path()
         .metadata()
         .ok()
-        .map_or(false, |md| md.file_type().is_dir())
+        .is_some_and(|md| md.file_type().is_dir())
 }
 
 /// Returns true if and only if the given path is on the same device as the
