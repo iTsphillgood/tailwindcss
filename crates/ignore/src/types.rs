@@ -227,7 +227,7 @@ impl Types {
             has_selected: false,
             glob_to_selection: vec![],
             set: GlobSetBuilder::new().build().unwrap(),
-            matches: Arc::new(Pool::new(|| vec![])),
+            matches: Arc::new(Pool::new(Vec::new)),
         }
     }
 
@@ -254,7 +254,7 @@ impl Types {
     /// The path is considered ignored if it matches a negated file type.
     /// If at least one file type is selected and `path` doesn't match, then
     /// the path is also considered ignored.
-    pub fn matched<'a, P: AsRef<Path>>(&'a self, path: P, is_dir: bool) -> Match<Glob<'a>> {
+    pub fn matched<P: AsRef<Path>>(&self, path: P, is_dir: bool) -> Match<Glob<'_>> {
         // File types don't apply to directories, and we can't do anything
         // if our glob set is empty.
         if is_dir || self.set.is_empty() {
@@ -272,7 +272,7 @@ impl Types {
             }
         };
         let mut matches = self.matches.get();
-        self.set.matches_into(name, &mut *matches);
+        self.set.matches_into(name, &mut matches);
         // The highest precedent match is the last one.
         if let Some(&i) = matches.last() {
             let (isel, _) = self.glob_to_selection[i];
@@ -297,6 +297,12 @@ impl Types {
 pub struct TypesBuilder {
     types: HashMap<String, FileTypeDef>,
     selections: Vec<Selection<()>>,
+}
+
+impl Default for TypesBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TypesBuilder {
@@ -353,7 +359,7 @@ impl TypesBuilder {
             has_selected,
             glob_to_selection,
             set,
-            matches: Arc::new(Pool::new(|| vec![])),
+            matches: Arc::new(Pool::new(Vec::new)),
         })
     }
 
@@ -437,8 +443,8 @@ impl TypesBuilder {
     /// 2. `{name}:include:{comma-separated list of already defined names}.
     ///     This defines an 'include' definition that associates the given name
     ///     with the definitions of the given existing types.
-    /// Names may not include any characters that are not
-    /// Unicode letters or numbers.
+    ///    Names may not include any characters that are not
+    ///    Unicode letters or numbers.
     pub fn add_def(&mut self, def: &str) -> Result<(), Error> {
         let parts: Vec<&str> = def.split(':').collect();
         match parts.len() {
@@ -476,7 +482,7 @@ impl TypesBuilder {
 
     /// Add a set of default file type definitions.
     pub fn add_defaults(&mut self) -> &mut TypesBuilder {
-        static MSG: &'static str = "adding a default type should never fail";
+        static MSG: &str = "adding a default type should never fail";
         for &(names, exts) in DEFAULT_TYPES {
             for name in names {
                 for ext in exts {

@@ -248,8 +248,8 @@ impl Ignore {
             Gitignore::empty()
         } else {
             let (m, err) = create_gitignore(
-                &dir,
-                &dir,
+                dir,
+                dir,
                 &self.0.custom_ignore_filenames,
                 self.0.opts.ignore_case_insensitive,
             );
@@ -260,8 +260,8 @@ impl Ignore {
             Gitignore::empty()
         } else {
             let (m, err) = create_gitignore(
-                &dir,
-                &dir,
+                dir,
+                dir,
                 &[".ignore"],
                 self.0.opts.ignore_case_insensitive,
             );
@@ -272,8 +272,8 @@ impl Ignore {
             Gitignore::empty()
         } else {
             let (m, err) = create_gitignore(
-                &dir,
-                &dir,
+                dir,
+                dir,
                 &[".gitignore"],
                 self.0.opts.ignore_case_insensitive,
             );
@@ -286,7 +286,7 @@ impl Ignore {
             match resolve_git_commondir(dir, git_type) {
                 Ok(git_dir) => {
                     let (m, err) = create_gitignore(
-                        &dir,
+                        dir,
                         &git_dir,
                         &["info/exclude"],
                         self.0.opts.ignore_case_insensitive,
@@ -348,7 +348,7 @@ impl Ignore {
     /// ignored or not.
     ///
     /// The match contains information about its origin.
-    fn matched<'a, P: AsRef<Path>>(&'a self, path: P, is_dir: bool) -> Match<IgnoreMatch<'a>> {
+    fn matched<P: AsRef<Path>>(&self, path: P, is_dir: bool) -> Match<IgnoreMatch<'_>> {
         // We need to be careful with our path. If it has a leading ./, then
         // strip it because it causes nothing but trouble.
         let mut path = path.as_ref();
@@ -437,25 +437,25 @@ impl Ignore {
                 if m_custom_ignore.is_none() {
                     m_custom_ignore =
                         ig.0.custom_ignore_matcher
-                            .matched(&path, is_dir)
+                            .matched(path, is_dir)
                             .map(IgnoreMatch::gitignore);
                 }
                 if m_ignore.is_none() {
                     m_ignore =
                         ig.0.ignore_matcher
-                            .matched(&path, is_dir)
+                            .matched(path, is_dir)
                             .map(IgnoreMatch::gitignore);
                 }
                 if any_git && !saw_git && m_gi.is_none() {
                     m_gi =
                         ig.0.git_ignore_matcher
-                            .matched(&path, is_dir)
+                            .matched(path, is_dir)
                             .map(IgnoreMatch::gitignore);
                 }
                 if any_git && !saw_git && m_gi_exclude.is_none() {
                     m_gi_exclude =
                         ig.0.git_exclude_matcher
-                            .matched(&path, is_dir)
+                            .matched(path, is_dir)
                             .map(IgnoreMatch::gitignore);
                 }
                 saw_git = saw_git || ig.0.has_git;
@@ -477,12 +477,12 @@ impl Ignore {
             if !m_explicit.is_none() {
                 break;
             }
-            m_explicit = gi.matched(&path, is_dir).map(IgnoreMatch::gitignore);
+            m_explicit = gi.matched(path, is_dir).map(IgnoreMatch::gitignore);
         }
         let m_global = if any_git {
             self.0
                 .git_global_matcher
-                .matched(&path, is_dir)
+                .matched(path, is_dir)
                 .map(IgnoreMatch::gitignore)
         } else {
             Match::None
@@ -803,7 +803,7 @@ pub(crate) fn create_gitignore<T: AsRef<OsStr>>(
 fn resolve_git_commondir(dir: &Path, git_type: Option<FileType>) -> Result<PathBuf, Option<Error>> {
     let git_dir_path = || dir.join(".git");
     let git_dir = git_dir_path();
-    if !git_type.map_or(false, |ft| ft.is_file()) {
+    if !git_type.is_some_and(|ft| ft.is_file()) {
         return Ok(git_dir);
     }
     let file = match File::open(git_dir) {
